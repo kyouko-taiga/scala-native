@@ -383,7 +383,7 @@ trait Eval { self: Interflow =>
         def fallback =
           delay(nir.Op.Is(refty, obj))
         def objNotNull =
-          delay(nir.Op.Comp(nir.Comp.Ine, nir.Rt.Object, obj, nir.Val.Null))
+          delay(nir.Comp.Ine(nir.Rt.Object, obj, nir.Val.Null))
         val objty = obj match {
           case InstanceRef(ty) =>
             ty

@@ -174,15 +174,7 @@ object Generate {
               mask
             )
           ),
-          let(
-            result,
-            nir.Op.Comp(
-              nir.Comp.Ine,
-              nir.Type.Int,
-              and,
-              nir.Val.Int(0)
-            )
-          ),
+          let(result, nir.Comp.Ine(nir.Type.Int, and, nir.Val.Int(0))),
           nir.Inst.Ret(result)
         )
       )
@@ -411,7 +403,7 @@ object Generate {
                 nir.Inst.Let(self.id, nir.Op.Load(clsTy, slot), nir.Next.None),
                 nir.Inst.Let(
                   cond.id,
-                  nir.Op.Comp(nir.Comp.Ine, nir.Rt.Object, self, nir.Val.Null),
+                  nir.Comp.Ine(nir.Rt.Object, self, nir.Val.Null),
                   nir.Next.None
                 ),
                 nir.Inst.If(cond, nir.Next(existing), nir.Next(initialize)),

@@ -583,7 +583,7 @@ trait Combine { self: Interflow =>
         combine(Ine, ty, x, y)
 
       case (_, l, r) =>
-        delay(nir.Op.Comp(comp, ty, r, l))
+        delay(comp(ty, r, l))
     }
   }
 

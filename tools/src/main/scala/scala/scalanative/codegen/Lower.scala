@@ -731,9 +731,9 @@ object Lower {
         scopeId: nir.ScopeId
     ): Unit = {
       val nir.Op.Comp(comp, ty, l, r) = op
-      val left = genVal(buf, l)
-      val right = genVal(buf, r)
-      buf.let(n, nir.Op.Comp(comp, ty, left, right), unwind)
+      val lhs = genVal(buf, l)
+      val rhs = genVal(buf, r)
+      buf.let(n, comp(ty, lhs, rhs), unwind)
     }
 
     // Cached function
@@ -999,10 +999,8 @@ object Lower {
           val isNullL, checkL, resultL = fresh()
 
           // check if obj is null
-          val isNull = let(
-            nir.Op.Comp(nir.Comp.Ieq, nir.Type.Ptr, obj, nir.Val.Null),
-            unwind
-          )
+          val isNull =
+            let(nir.Comp.Ieq(nir.Type.Ptr, obj, nir.Val.Null), unwind)
           branch(isNull, nir.Next(isNullL), nir.Next(checkL))
 
           // in case it's null, result is always false
@@ -1029,10 +1027,7 @@ object Lower {
       ty match {
         case ClassRef(cls) if meta.ranges(cls).length == 1 =>
           val typeptr = let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
-          let(
-            nir.Op.Comp(nir.Comp.Ieq, nir.Type.Ptr, typeptr, rtti(cls).const),
-            unwind
-          )
+          let(nir.Comp.Ieq(nir.Type.Ptr, typeptr, rtti(cls).const), unwind)
 
         case ClassRef(cls) =>
           val range = meta.ranges(cls)
@@ -1043,18 +1038,12 @@ object Lower {
               unwind
             )
           val id = let(nir.Op.Load(nir.Type.Int, idptr), unwind)
-          val ge =
-            let(
-              nir.Op
-                .Comp(nir.Comp.Sle, nir.Type.Int, nir.Val.Int(range.start), id),
-              unwind
-            )
+          val ge = let(
+            nir.Comp.Sle(nir.Type.Int, nir.Val.Int(range.start), id),
+            unwind
+          )
           val le =
-            let(
-              nir.Op
-                .Comp(nir.Comp.Sle, nir.Type.Int, id, nir.Val.Int(range.end)),
-              unwind
-            )
+            let(nir.Comp.Sle(nir.Type.Int, id, nir.Val.Int(range.end)), unwind)
           let(nir.Op.Bin(nir.Bin.And, nir.Type.Bool, ge, le), unwind)
 
         case TraitRef(trt) =>
@@ -1360,13 +1349,12 @@ object Lower {
             util.unreachable
         }
 
-        val divisorIsMinus1 =
-          let(nir.Op.Comp(nir.Comp.Ieq, ty, divisor, minus1), unwind)
+        val divisorIsMinus1 = let(nir.Comp.Ieq(ty, divisor, minus1), unwind)
         branch(divisorIsMinus1, nir.Next(mayOverflowL), nir.Next(noOverflowL))
 
         label(mayOverflowL)
         val dividendIsMinValue =
-          let(nir.Op.Comp(nir.Comp.Ieq, ty, dividend, minValue), unwind)
+          let(nir.Comp.Ieq(ty, dividend, minValue), unwind)
         branch(
           dividendIsMinValue,
           nir.Next(didOverflowL),
