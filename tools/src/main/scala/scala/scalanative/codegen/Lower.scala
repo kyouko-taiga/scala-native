@@ -1044,7 +1044,7 @@ object Lower {
           )
           val le =
             let(nir.Comp.Sle(nir.Type.Int, id, nir.Val.Int(range.end)), unwind)
-          let(nir.Op.Bin(nir.Bin.And, nir.Type.Bool, ge, le), unwind)
+          let(nir.Bin.And(nir.Type.Bool, ge, le), unwind)
 
         case TraitRef(trt) =>
           val typeptr = let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
@@ -1630,12 +1630,7 @@ object Lower {
               if (elemSize == 1) asSize
               else
                 buf.let(
-                  nir.Op.Bin(
-                    nir.Bin.Imul,
-                    nir.Type.Size,
-                    asSize,
-                    nir.Val.Size(elemSize)
-                  ),
+                  nir.Bin.Imul(nir.Type.Size, asSize, nir.Val.Size(elemSize)),
                   unwind
                 )
           }

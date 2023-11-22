@@ -515,7 +515,7 @@ trait Eval { self: Interflow =>
   ): nir.Val = {
     import state.{emit, materialize}
     def fallback =
-      emit(nir.Op.Bin(bin, ty, materialize(l), materialize(r)))
+      emit(bin(ty, materialize(l), materialize(r)))
     def bailOut =
       throw BailOut(s"can't eval bin op: $bin[${ty.show}] ${l.show}, ${r.show}")
     bin match {

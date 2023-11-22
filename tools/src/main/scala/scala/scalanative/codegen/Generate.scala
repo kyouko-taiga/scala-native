@@ -127,16 +127,11 @@ object Generate {
         sig,
         Seq(
           nir.Inst.Label(fresh(), Seq(firstid, secondid)),
-          let(row, nir.Op.Bin(nir.Bin.Imul, nir.Type.Int, firstid, columns)),
-          let(bitIndex, nir.Op.Bin(nir.Bin.Iadd, nir.Type.Int, row, secondid)),
+          let(row, nir.Bin.Imul(nir.Type.Int, firstid, columns)),
+          let(bitIndex, nir.Bin.Iadd(nir.Type.Int, row, secondid)),
           let(
             arrayPos,
-            nir.Op.Bin(
-              nir.Bin.Ashr,
-              nir.Type.Int,
-              bitIndex,
-              nir.Val.Int(BitMatrix.AddressBitsPerWord)
-            )
+            nir.Bin.Ashr(nir.Type.Int, bitIndex, nir.Val.Int(BitMatrix.AddressBitsPerWord))
           ),
           let(
             intptr,
@@ -149,31 +144,10 @@ object Generate {
           let(int, nir.Op.Load(nir.Type.Int, intptr)),
           let(
             toShift,
-            nir.Op.Bin(
-              nir.Bin.And,
-              nir.Type.Int,
-              bitIndex,
-              nir.Val.Int(BitMatrix.RightBits)
-            )
+            nir.Bin.And(nir.Type.Int, bitIndex, nir.Val.Int(BitMatrix.RightBits))
           ),
-          let(
-            mask,
-            nir.Op.Bin(
-              nir.Bin.Shl,
-              nir.Type.Int,
-              nir.Val.Int(1),
-              toShift
-            )
-          ),
-          let(
-            and,
-            nir.Op.Bin(
-              nir.Bin.And,
-              nir.Type.Int,
-              int,
-              mask
-            )
-          ),
+          let(mask, nir.Bin.Shl(nir.Type.Int, nir.Val.Int(1), toShift)),
+          let(and, nir.Bin.And(nir.Type.Int, int, mask)),
           let(result, nir.Comp.Ine(nir.Type.Int, and, nir.Val.Int(0))),
           nir.Inst.Ret(result)
         )

@@ -18,10 +18,10 @@ trait Combine { self: Interflow =>
     import state.{materialize, delay, emit}
 
     def fallback = {
-      if (nir.Op.Bin(bin, ty, l, r).isPure) {
-        delay(nir.Op.Bin(bin, ty, l, r))
+      if (bin(ty, l, r).isPure) {
+        delay(bin(ty, l, r))
       } else {
-        emit(nir.Op.Bin(bin, ty, materialize(l), materialize(r)))
+        emit(bin(ty, materialize(l), materialize(r)))
       }
     }
 
