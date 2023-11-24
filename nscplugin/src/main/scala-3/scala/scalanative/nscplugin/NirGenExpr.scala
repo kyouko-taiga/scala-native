@@ -2113,7 +2113,7 @@ trait NirGenExpr(using Context) {
         Option.when(ptrp.symbol.isVolatile)(
           nir.SyncAttrs(nir.MemoryOrder.Acquire)
         )
-      buf.load(ty, ptr, unwind, syncAttrs)
+      buf.let(ptr.loadAs(ty, syncAttrs), unwind)
     }
 
     private def genRawPtrStoreOp(app: Apply, code: Int): nir.Val = {
@@ -2555,7 +2555,7 @@ trait NirGenExpr(using Context) {
       )
       fromExtern(
         ty,
-        buf.load(externTy, name, unwind, syncAttrs)
+        buf.let(name.loadAs(externTy, syncAttrs), unwind)
       )
     }
 

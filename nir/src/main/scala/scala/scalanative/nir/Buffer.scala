@@ -76,14 +76,6 @@ class Buffer(implicit fresh: Fresh) {
       scope: ScopeId
   ): Val.Local = let(Op.Call(ty, ptr, args), unwind)
 
-  def load(
-      ty: Type,
-      ptr: Val,
-      unwind: Next,
-      syncAttrs: Option[SyncAttrs] = None
-  )(implicit pos: Position, scope: ScopeId): Val.Local =
-    let(Op.Load(ty, ptr, syncAttrs), unwind)
-
   def store(
       ty: Type,
       ptr: Val,

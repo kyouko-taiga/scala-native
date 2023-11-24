@@ -760,8 +760,8 @@ object Lower {
           memoryOrder = nir.MemoryOrder.Unordered,
           isVolatile = true
         )
-        val safepointAddr = buf.load(nir.Type.Ptr, GCSafepoint, handler)
-        buf.load(nir.Type.Ptr, safepointAddr, handler, Some(syncAttrs))
+        val safepointAddr = buf.let(GCSafepoint.loadAs(nir.Type.Ptr), handler)
+        buf.let(safepointAddr.loadAs(nir.Type.Ptr, Some(syncAttrs)), handler)
       }
     }
 
@@ -943,10 +943,10 @@ object Lower {
           meta.analysis.dynsigs.zipWithIndex.find(_._1 == sig).get._2
 
         // Load the type information pointer
-        val typeptr = load(nir.Type.Ptr, obj, unwind)
+        val typeptr = let(obj.loadAs(nir.Type.Ptr), unwind)
         // Load the dynamic hash map for given type, make sure it's not null
         val mapelem = elem(classRttiType, typeptr, ClassRttiDynmapPath, unwind)
-        val mapptr = load(nir.Type.Ptr, mapelem, unwind)
+        val mapptr = let(mapelem.loadAs(nir.Type.Ptr), unwind)
         // If hash map is not null, it has to contain at least one entry
         throwIfNull(mapptr)
         // Perform dynamic dispatch via dyndispatch helper
