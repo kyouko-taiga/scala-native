@@ -636,7 +636,7 @@ trait Combine { self: Interflow =>
         x
 
       case _ =>
-        delay(nir.Op.Conv(conv, ty, value))
+        delay(conv(ty, value))
     }
   }
 

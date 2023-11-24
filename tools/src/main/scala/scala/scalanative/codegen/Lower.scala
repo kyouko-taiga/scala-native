@@ -650,11 +650,7 @@ object Lower {
             if (platform.useOpaquePointers) ptr
             else {
               val asPtr = fresh()
-              genConvOp(
-                buf,
-                asPtr,
-                nir.Op.Conv(nir.Conv.Bitcast, nir.Type.Ptr, ptr)
-              )
+              genConvOp(buf, asPtr, nir.Conv.Bitcast(nir.Type.Ptr, ptr))
               nir.Val.Local(asPtr, nir.Type.Ptr)
             }
           genLoadOp(
@@ -665,11 +661,8 @@ object Lower {
           genConvOp(
             buf,
             n,
-            nir.Op.Conv(
-              nir.Conv.Trunc,
-              nir.Type.Bool,
-              nir.Val.Local(valueAsByte, nir.Type.Byte)
-            )
+            nir.Conv
+              .Trunc(nir.Type.Bool, nir.Val.Local(valueAsByte, nir.Type.Byte))
           )
 
         case nir.Op.Load(ty, ptr, syncAttrs) =>
@@ -694,18 +687,10 @@ object Lower {
             if (platform.useOpaquePointers) ptr
             else {
               val asPtr = fresh()
-              genConvOp(
-                buf,
-                asPtr,
-                nir.Op.Conv(nir.Conv.Bitcast, nir.Type.Ptr, ptr)
-              )
+              genConvOp(buf, asPtr, nir.Conv.Bitcast(nir.Type.Ptr, ptr))
               nir.Val.Local(asPtr, nir.Type.Ptr)
             }
-          genConvOp(
-            buf,
-            valueAsByte,
-            nir.Op.Conv(nir.Conv.Zext, nir.Type.Byte, value)
-          )
+          genConvOp(buf, valueAsByte, nir.Conv.Zext(nir.Type.Byte, value))
           genStoreOp(
             buf,
             n,
@@ -1102,7 +1087,7 @@ object Lower {
           if (platform.useOpaquePointers)
             let(n, nir.Op.Copy(v), unwind)
           else
-            let(n, nir.Op.Conv(nir.Conv.Bitcast, ty, v), unwind)
+            let(n, nir.Conv.Bitcast(ty, v), unwind)
 
         case nir.Op.As(to, v) =>
           util.unsupported(s"can't cast from ${v.ty} to $to")
@@ -1275,7 +1260,7 @@ object Lower {
           label(resultL, Seq(nir.Val.Local(n, op.resty)))
 
         case nir.Op.Conv(conv, ty, value) =>
-          let(n, nir.Op.Conv(conv, ty, genVal(buf, value)), unwind)
+          let(n, conv(ty, genVal(buf, value)), unwind)
       }
     }
 

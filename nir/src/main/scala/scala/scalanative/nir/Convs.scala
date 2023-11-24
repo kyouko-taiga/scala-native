@@ -1,11 +1,23 @@
 package scala.scalanative
 package nir
 
+/** A type conversion. */
 sealed abstract class Conv {
+
+  /** A textual representation of `this`. */
   final def show: String = nir.Show(this)
+
+  /** Returns a NIR operation applying the operator represented by `this` to
+   *  convert `v` to an instance of `ty`.
+   */
+  final def apply(ty: Type, v: Val): Op.Conv = {
+    Op.Conv(this, ty, v)
+  }
+
 }
 
 object Conv {
+
   case object ZSizeCast extends Conv
   case object SSizeCast extends Conv
   case object Trunc extends Conv
@@ -20,4 +32,5 @@ object Conv {
   case object Ptrtoint extends Conv
   case object Inttoptr extends Conv
   case object Bitcast extends Conv
+
 }
