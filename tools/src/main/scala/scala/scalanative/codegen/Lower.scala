@@ -534,7 +534,7 @@ object Lower {
           val isNullL =
             nullPointerSlowPath.getOrElseUpdate(unwindHandler, fresh())
 
-          val isNull = comp(nir.Comp.Ine, v.ty, v, nir.Val.Null, unwind)
+          val isNull = let(nir.Comp.Ine(v.ty, v, nir.Val.Null), unwind)
           branch(isNull, nir.Next(notNullL), nir.Next(isNullL))
           label(notNullL)
 
@@ -551,9 +551,9 @@ object Lower {
       val outOfBoundsL =
         outOfBoundsSlowPath.getOrElseUpdate(unwindHandler, fresh())
 
-      val gt0 = comp(nir.Comp.Sge, nir.Type.Int, idx, zero, unwind)
-      val ltLen = comp(nir.Comp.Slt, nir.Type.Int, idx, len, unwind)
-      val inBounds = bin(nir.Bin.And, nir.Type.Bool, gt0, ltLen, unwind)
+      val gt0 = let(nir.Comp.Sge(nir.Type.Int, idx, zero), unwind)
+      val ltLen = let(nir.Comp.Slt(nir.Type.Int, idx, len), unwind)
+      val inBounds = let(nir.Bin.And(nir.Type.Bool, gt0, ltLen), unwind)
       branch(
         inBounds,
         nir.Next(inBoundsL),
@@ -933,7 +933,7 @@ object Lower {
           noSuchMethodSlowPath.getOrElseUpdate(unwindHandler, fresh())
 
         val condNull =
-          comp(nir.Comp.Ine, nir.Type.Ptr, value, nir.Val.Null, unwind)
+          let(nir.Comp.Ine(nir.Type.Ptr, value, nir.Val.Null), unwind)
         branch(
           condNull,
           nir.Next(notNullL),
@@ -1071,7 +1071,7 @@ object Lower {
           val checkIfIsInstanceOfL, castL = fresh()
           val failL = classCastSlowPath.getOrElseUpdate(unwindHandler, fresh())
 
-          val isNull = comp(nir.Comp.Ieq, v.ty, v, nir.Val.Null, unwind)
+          val isNull = let(nir.Comp.Ieq(v.ty, v, nir.Val.Null), unwind)
           branch(isNull, nir.Next(castL), nir.Next(checkIfIsInstanceOfL))
 
           label(checkIfIsInstanceOfL)
@@ -1229,14 +1229,14 @@ object Lower {
           val isNaNL, checkLessThanMinL, lessThanMinL, checkLargerThanMaxL,
               largerThanMaxL, inBoundsL, resultL = fresh()
 
-          val isNaN = comp(nir.Comp.Fne, v.ty, v, v, unwind)
+          val isNaN = let(nir.Comp.Fne(v.ty, v, v), unwind)
           branch(isNaN, nir.Next(isNaNL), nir.Next(checkLessThanMinL))
 
           label(isNaNL)
           jump(resultL, Seq(nir.Val.Zero(op.resty)))
 
           label(checkLessThanMinL)
-          val isLessThanMin = comp(nir.Comp.Fle, v.ty, v, fmin, unwind)
+          val isLessThanMin = let(nir.Comp.Fle(v.ty, v, fmin), unwind)
           branch(
             isLessThanMin,
             nir.Next(lessThanMinL),
@@ -1247,7 +1247,7 @@ object Lower {
           jump(resultL, Seq(imin))
 
           label(checkLargerThanMaxL)
-          val isLargerThanMax = comp(nir.Comp.Fge, v.ty, v, fmax, unwind)
+          val isLargerThanMax = let(nir.Comp.Fge(v.ty, v, fmax), unwind)
           branch(isLargerThanMax, nir.Next(largerThanMaxL), nir.Next(inBoundsL))
 
           label(largerThanMaxL)
@@ -1282,8 +1282,7 @@ object Lower {
         val failL =
           divisionByZeroSlowPath.getOrElseUpdate(unwindHandler, fresh())
 
-        val isZero =
-          comp(nir.Comp.Ine, ty, divisor, nir.Val.Zero(ty), unwind)
+        val isZero = let(nir.Comp.Ine(ty, divisor, nir.Val.Zero(ty)), unwind)
         branch(isZero, nir.Next(succL), nir.Next(failL))
 
         label(succL)
@@ -1376,7 +1375,7 @@ object Lower {
           case _ =>
             util.unreachable
         }
-        val masked = bin(nir.Bin.And, ty, r, mask, unwind)
+        val masked = let(nir.Bin.And(ty, r, mask), unwind)
         let(n, op.copy(r = masked), unwind)
       }
 
@@ -1606,9 +1605,9 @@ object Lower {
                 case nir.Type.FixedSizeI(width, _) =>
                   if (width == platform.sizeOfPtrBits) sizeV
                   else if (width > platform.sizeOfPtrBits)
-                    buf.conv(nir.Conv.Trunc, nir.Type.Size, sizeV, unwind)
+                    buf.let(nir.Conv.Trunc(nir.Type.Size, sizeV), unwind)
                   else
-                    buf.conv(nir.Conv.Zext, nir.Type.Size, sizeV, unwind)
+                    buf.let(nir.Conv.Zext(nir.Type.Size, sizeV), unwind)
 
                 case _ => sizeV
               }

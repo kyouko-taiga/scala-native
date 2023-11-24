@@ -89,11 +89,9 @@ trait PolyInline { self: Interflow =>
           emit.label(checkLabel)
         }
         val cls = classes(idx)
-        val isCls = emit.comp(
-          nir.Comp.Ieq,
-          nir.Rt.Class,
-          objcls,
-          nir.Val.Global(cls.name, nir.Rt.Class),
+        val isCls = emit.let(
+          nir.Comp
+            .Ieq(nir.Rt.Class, objcls, nir.Val.Global(cls.name, nir.Rt.Class)),
           nir.Next.None
         )
         if (idx < targets.size - 2) {
@@ -123,7 +121,7 @@ trait PolyInline { self: Interflow =>
         val cargs = margs.zip(argtys).map {
           case (value, argty) =>
             if (Sub.is(value.ty, argty)) value
-            else emit.conv(nir.Conv.Bitcast, argty, value, nir.Next.None)
+            else emit.let(nir.Conv.Bitcast(argty, value), nir.Next.None)
         }
         val res =
           emit.call(ty, nir.Val.Global(m, nir.Type.Ptr), cargs, nir.Next.None)

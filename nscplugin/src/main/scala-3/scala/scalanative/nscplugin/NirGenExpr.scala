@@ -967,7 +967,7 @@ trait NirGenExpr(using Context) {
           case (_, nir.Type.Nothing) =>
             val isNullL, notNullL = fresh()
             val isNull =
-              buf.comp(nir.Comp.Ieq, boxed.ty, boxed, nir.Val.Null, unwind)
+              buf.let(nir.Comp.Ieq(boxed.ty, boxed, nir.Val.Null), unwind)
             buf.branch(isNull, nir.Next(isNullL), nir.Next(notNullL))
             buf.label(isNullL)
             buf.raise(nir.Val.Null, unwind)
@@ -1329,7 +1329,7 @@ trait NirGenExpr(using Context) {
     }
 
     private def negateBool(value: nir.Val)(using nir.Position): nir.Val =
-      buf.bin(nir.Bin.Xor, nir.Type.Bool, nir.Val.True, value, unwind)
+      buf.let(nir.Bin.Xor(nir.Type.Bool, nir.Val.True, value), unwind)
 
     private def genUnaryOp(code: Int, rightp: Tree, opty: nir.Type)(using
         nir.Position
@@ -1352,11 +1352,11 @@ trait NirGenExpr(using Context) {
       (opty, code) match {
         case (_: nir.Type.I | _: nir.Type.F, POS) => coerced
         case (_: nir.Type.I, NOT) =>
-          buf.bin(nir.Bin.Xor, tpe, numOfType(-1, tpe), coerced, unwind)
+          buf.let(nir.Bin.Xor(tpe, numOfType(-1, tpe), coerced), unwind)
         case (_: nir.Type.F, NEG) =>
-          buf.bin(nir.Bin.Fmul, tpe, numOfType(-1, tpe), coerced, unwind)
+          buf.let(nir.Bin.Fmul(tpe, numOfType(-1, tpe), coerced), unwind)
         case (_: nir.Type.I, NEG) =>
-          buf.bin(nir.Bin.Isub, tpe, numOfType(0, tpe), coerced, unwind)
+          buf.let(nir.Bin.Isub(tpe, numOfType(0, tpe), coerced), unwind)
         case (nir.Type.Bool, ZNOT) => negateBool(coerced)
         case _ =>
           report.error(s"Unknown unary operation code: $code", rightp.sourcePos)
@@ -1521,7 +1521,7 @@ trait NirGenExpr(using Context) {
         val left = genExpr(leftp)
         val right = genExpr(rightp)
         val comp = if (negated) nir.Comp.Ine else nir.Comp.Ieq
-        buf.comp(comp, nir.Rt.Object, left, right, unwind)
+        buf.let(comp(nir.Rt.Object, left, right), unwind)
       } else genClassUniversalEquality(leftp, rightp, negated)
     }
 
@@ -1583,10 +1583,10 @@ trait NirGenExpr(using Context) {
       }
       else if (isNull(l)) {
         // null == expr -> expr eq null
-        buf.comp(comparator, nir.Rt.Object, genExpr(r), nir.Val.Null, unwind)
+        buf.let(comparator(nir.Rt.Object, genExpr(r), nir.Val.Null), unwind)
       } else if (isNull(r)) {
         // expr == null -> expr eq null
-        buf.comp(comparator, nir.Rt.Object, genExpr(l), nir.Val.Null, unwind)
+        buf.let(comparator(nir.Rt.Object, genExpr(l), nir.Val.Null), unwind)
       } else if (isNonNullExpr(l)) maybeNegate {
         // SI-7852 Avoid null check if L is statically non-null.
         genApplyMethod(
@@ -1604,13 +1604,13 @@ trait NirGenExpr(using Context) {
           val mergev = nir.Val.Local(fresh(), nir.Type.Bool)
           val left = genExpr(l)
           val isnull =
-            buf.comp(nir.Comp.Ieq, nir.Rt.Object, left, nir.Val.Null, unwind)
+            buf.let(nir.Comp.Ieq(nir.Rt.Object, left, nir.Val.Null), unwind)
           buf.branch(isnull, nir.Next(thenn), nir.Next(elsen))
           locally {
             buf.label(thenn)
             val right = genExpr(r)
             val thenv =
-              buf.comp(nir.Comp.Ieq, nir.Rt.Object, right, nir.Val.Null, unwind)
+              buf.let(nir.Comp.Ieq(nir.Rt.Object, right, nir.Val.Null), unwind)
             buf.jump(mergen, Seq(thenv))
           }
           locally {
@@ -1692,14 +1692,14 @@ trait NirGenExpr(using Context) {
                       val conv =
                         if (isUnsigned) nir.Conv.Zext
                         else nir.Conv.Sext
-                      buf.conv(conv, nir.Type.Int, arg, unwind)
+                      buf.let(conv(nir.Type.Int, arg), unwind)
                     case nir.Type.Long =>
                       // On 32-bit systems Long needs to be truncated to Int
                       // Cast it to size to make undependent from architecture
                       val conv =
                         if (isUnsigned) nir.Conv.ZSizeCast
                         else nir.Conv.SSizeCast
-                      buf.conv(conv, nir.Type.Size, arg, unwind)
+                      buf.let(conv(nir.Type.Size, arg), unwind)
 
                     case _ => arg
                   }
@@ -1751,7 +1751,7 @@ trait NirGenExpr(using Context) {
           nir.Position
       ): nir.Val = {
         val cond = ContTree { () =>
-          buf.comp(nir.Comp.Ieq, nir.Rt.Object, value, nir.Val.Null, unwind)
+          buf.let(nir.Comp.Ieq(nir.Rt.Object, value, nir.Val.Null), unwind)
         }
         val thenp = ContTree { () => nir.Val.String("null") }
         val elsep = ContTree { () =>
@@ -1860,7 +1860,7 @@ trait NirGenExpr(using Context) {
     def genCastOp(from: nir.Type, to: nir.Type, value: nir.Val)(using
         nir.Position
     ): nir.Val =
-      castConv(from, to).fold(value)(buf.conv(_, to, value, unwind))
+      castConv(from, to).fold(value)((f) => buf.let(f(to, value), unwind))
 
     private def genCoercion(app: Apply, receiver: Tree, code: Int): nir.Val = {
       given nir.Position = app.span
@@ -1910,7 +1910,7 @@ trait NirGenExpr(using Context) {
             )
             nir.Conv.Bitcast
         }
-        buf.conv(conv, toty, value, unwind)
+        buf.let(conv(toty, value), unwind)
       }
     }
 
@@ -2177,7 +2177,7 @@ trait NirGenExpr(using Context) {
         case CAST_LONG_TO_RAWSIZE         => nir.Type.Size -> nir.Conv.SSizeCast
       }
 
-      buf.conv(conv, toty, rec, unwind)
+      buf.let(conv(toty, rec), unwind)
     }
 
     private def genUnsignedOp(app: Tree, code: Int): nir.Val = {
@@ -2197,13 +2197,13 @@ trait NirGenExpr(using Context) {
           val ty = genType(app.tpe)
           val arg = genExpr(argp)
 
-          buf.conv(nir.Conv.Zext, ty, arg, unwind)
+          buf.let(nir.Conv.Zext(ty, arg), unwind)
 
         case Apply(_, Seq(argp)) if castUnsignedToFloat =>
           val ty = genType(app.tpe)
           val arg = genExpr(argp)
 
-          buf.conv(nir.Conv.Uitofp, ty, arg, unwind)
+          buf.let(nir.Conv.Uitofp(ty, arg), unwind)
 
         case Apply(_, Seq(leftp, rightp)) =>
           val bin = code match {
@@ -2214,7 +2214,7 @@ trait NirGenExpr(using Context) {
           val left = genExpr(leftp)
           val right = genExpr(rightp)
 
-          buf.bin(bin, ty, left, right, unwind)
+          buf.let(bin(ty, left, right), unwind)
       }
     }
 
@@ -2377,7 +2377,7 @@ trait NirGenExpr(using Context) {
             }
 
           if (unboxed.ty == nir.Type.Size) unboxed
-          else buf.conv(nir.Conv.SSizeCast, nir.Type.Size, unboxed, unwind)
+          else buf.let(nir.Conv.SSizeCast(nir.Type.Size, unboxed), unwind)
       }
 
     def genStackalloc(app: Apply): nir.Val = {

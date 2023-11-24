@@ -114,21 +114,6 @@ class Buffer(implicit fresh: Fresh) {
       scope: ScopeId
   ): Val.Local = let(Op.Stackalloc(ty, n), unwind)
 
-  def bin(bin: nir.Bin, ty: Type, l: Val, r: Val, unwind: Next)(implicit
-      pos: Position,
-      scope: ScopeId
-  ): Val.Local = let(Op.Bin(bin, ty, l, r), unwind)
-
-  def comp(comp: nir.Comp, ty: Type, l: Val, r: Val, unwind: Next)(implicit
-      pos: Position,
-      scope: ScopeId
-  ): Val.Local = let(Op.Comp(comp, ty, l, r), unwind)
-
-  def conv(conv: nir.Conv, ty: Type, value: Val, unwind: Next)(implicit
-      pos: Position,
-      scope: ScopeId
-  ): Val.Local = let(Op.Conv(conv, ty, value), unwind)
-
   def classalloc(name: Global.Top, unwind: Next, zone: Option[Val] = None)(
       implicit
       pos: Position,

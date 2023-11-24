@@ -1453,13 +1453,13 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
     }
 
     def negateInt(value: nir.Val)(implicit pos: nir.Position): nir.Val =
-      buf.bin(nir.Bin.Isub, value.ty, numOfType(0, value.ty), value, unwind)
+      buf.let(nir.Bin.Isub(value.ty, numOfType(0, value.ty), value), unwind)
     def negateFloat(value: nir.Val)(implicit pos: nir.Position): nir.Val =
-      buf.bin(nir.Bin.Fmul, value.ty, numOfType(-1, value.ty), value, unwind)
+      buf.let(nir.Bin.Fmul(value.ty, numOfType(-1, value.ty), value), unwind)
     def negateBits(value: nir.Val)(implicit pos: nir.Position): nir.Val =
-      buf.bin(nir.Bin.Xor, value.ty, numOfType(-1, value.ty), value, unwind)
+      buf.let(nir.Bin.Xor(value.ty, numOfType(-1, value.ty), value), unwind)
     def negateBool(value: nir.Val)(implicit pos: nir.Position): nir.Val =
-      buf.bin(nir.Bin.Xor, nir.Type.Bool, nir.Val.True, value, unwind)
+      buf.let(nir.Bin.Xor(nir.Type.Bool, nir.Val.True, value), unwind)
 
     def genUnaryOp(code: Int, rightp: Tree, opty: nir.Type)(implicit
         pos: nir.Position
@@ -1647,7 +1647,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
         val left = genExpr(leftp)
         val right = genExpr(rightp)
         val comp = if (negated) nir.Comp.Ine else nir.Comp.Ieq
-        buf.comp(comp, nir.Rt.Object, left, right, unwind)
+        buf.let(comp(nir.Rt.Object, left, right), unwind)
       } else genClassUniversalEquality(leftp, rightp, negated)
     }
 
@@ -1701,10 +1701,10 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
       }
       else if (isNull(l)) {
         // null == expr -> expr eq null
-        buf.comp(comparator, nir.Rt.Object, genExpr(r), nir.Val.Null, unwind)
+        buf.let(comparator(nir.Rt.Object, genExpr(r), nir.Val.Null), unwind)
       } else if (isNull(r)) {
         // expr == null -> expr eq null
-        buf.comp(comparator, nir.Rt.Object, genExpr(l), nir.Val.Null, unwind)
+        buf.let(comparator(nir.Rt.Object, genExpr(l), nir.Val.Null), unwind)
       } else if (isNonNullExpr(l)) maybeNegate {
         // SI-7852 Avoid null check if L is statically non-null.
         genApplyMethod(
@@ -1721,13 +1721,13 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           val mergev = nir.Val.Local(fresh(), nir.Type.Bool)
           val left = genExpr(l)
           val isnull =
-            buf.comp(nir.Comp.Ieq, nir.Rt.Object, left, nir.Val.Null, unwind)
+            buf.let(nir.Comp.Ieq(nir.Rt.Object, left, nir.Val.Null), unwind)
           buf.branch(isnull, nir.Next(thenn), nir.Next(elsen))
           locally {
             buf.label(thenn)
             val right = genExpr(r)
             val thenv =
-              buf.comp(nir.Comp.Ieq, nir.Rt.Object, right, nir.Val.Null, unwind)
+              buf.let(nir.Comp.Ieq(nir.Rt.Object, right, nir.Val.Null), unwind)
             buf.jump(mergen, Seq(thenv))
           }
           locally {
@@ -1782,7 +1782,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           pos: nir.Position
       ): nir.Val = {
         val cond = ContTree { () =>
-          buf.comp(nir.Comp.Ieq, nir.Rt.Object, value, nir.Val.Null, unwind)
+          buf.let(nir.Comp.Ieq(nir.Rt.Object, value, nir.Val.Null), unwind)
         }
         val thenp = ContTree { () => nir.Val.String("null") }
         val elsep = ContTree { () =>
@@ -1996,7 +1996,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           (nir.Type.Long, nir.Type.Size, nir.Conv.SSizeCast)
       }
 
-      buf.conv(conv, toty, rec, unwind)
+      buf.let(conv(toty, rec), unwind)
     }
 
     def castConv(fromty: nir.Type, toty: nir.Type): Option[nir.Conv] =
@@ -2079,7 +2079,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
     def genCastOp(fromty: nir.Type, toty: nir.Type, value: nir.Val)(implicit
         pos: nir.Position
     ): nir.Val =
-      castConv(fromty, toty).fold(value)(buf.conv(_, toty, value, unwind))
+      castConv(fromty, toty).fold(value)((f) => buf.let(f(toty, value), unwind))
 
     private lazy val optimizedFunctions = {
       // Included functions should be pure, and should not not narrow the result type
@@ -2129,7 +2129,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
             }
 
           if (unboxed.ty == nir.Type.Size) unboxed
-          else buf.conv(nir.Conv.SSizeCast, nir.Type.Size, unboxed, unwind)
+          else buf.let(nir.Conv.SSizeCast(nir.Type.Size, unboxed), unwind)
       }
 
     private def genStackalloc(app: Apply): nir.Val = app match {
@@ -2223,14 +2223,14 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           val ty = genType(app.tpe)
           val arg = genExpr(argp)
 
-          buf.conv(nir.Conv.Zext, ty, arg, unwind)
+          buf.let(nir.Conv.Zext(ty, arg), unwind)
 
         case Apply(_, Seq(argp))
             if code >= UINT_TO_FLOAT && code <= ULONG_TO_DOUBLE =>
           val ty = genType(app.tpe)
           val arg = genExpr(argp)
 
-          buf.conv(nir.Conv.Uitofp, ty, arg, unwind)
+          buf.let(nir.Conv.Uitofp(ty, arg), unwind)
 
         case Apply(_, Seq(leftp, rightp)) =>
           val bin = code match {
@@ -2241,7 +2241,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           val left = genExpr(leftp)
           val right = genExpr(rightp)
 
-          buf.bin(bin, ty, left, right, unwind)
+          buf.let(bin(ty, left, right), unwind)
       }
     }
 
@@ -2427,7 +2427,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           case (nir.Type.Float, nir.Type.Double) =>
             nir.Conv.Fpext
         }
-        buf.conv(conv, toty, value, unwind)
+        buf.let(conv(toty, value), unwind)
       }
     }
 
@@ -2518,7 +2518,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
               val runtimeNothing = genType(RuntimeNothingClass)
               val isNullL, notNullL = fresh()
               val isNull =
-                buf.comp(nir.Comp.Ieq, boxed.ty, boxed, nir.Val.Null, unwind)
+                buf.let(nir.Comp.Ieq(boxed.ty, boxed, nir.Val.Null), unwind)
               buf.branch(isNull, nir.Next(isNullL), nir.Next(notNullL))
               buf.label(isNullL)
               buf.raise(nir.Val.Null, unwind)
@@ -2790,14 +2790,14 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
                       val conv =
                         if (isUnsigned) nir.Conv.Zext
                         else nir.Conv.Sext
-                      buf.conv(conv, nir.Type.Int, arg, unwind)
+                      buf.let(conv(nir.Type.Int, arg), unwind)
                     case nir.Type.Long =>
                       // On 32-bit systems Long needs to be truncated to Int
                       // Cast it to size to make undependent from architecture
                       val conv =
                         if (isUnsigned) nir.Conv.ZSizeCast
                         else nir.Conv.SSizeCast
-                      buf.conv(conv, nir.Type.Size, arg, unwind)
+                      buf.let(conv(nir.Type.Size, arg), unwind)
                     case _ => arg
                   }
                   res += promotedArg
