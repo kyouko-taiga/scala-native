@@ -197,11 +197,11 @@ sealed abstract class Val {
       this
   }
 
-  /** Returns a NIR operation loading a value of type `ty` from the memory
+  /** Returns a NIR operation loading a value of type `t` from the memory
    *  referenced by `this`.
    */
-  final def loadAs(ty: Type, syncAttrs: Option[SyncAttrs] = None): Op.Load = {
-    Op.Load(ty, this, syncAttrs)
+  final def loadAs(t: Type, syncAttrs: Option[SyncAttrs] = None): Op.Load = {
+    Op.Load(t, this, syncAttrs)
   }
 
 }

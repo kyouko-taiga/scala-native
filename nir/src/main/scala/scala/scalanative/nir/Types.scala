@@ -28,6 +28,21 @@ sealed abstract class Type {
 
   final def show: String = nir.Show(this)
   final def mangle: String = nir.Mangle(this)
+
+  /** `true` iff `this` is the type of a value that can be loaded. */
+  final def isLoadable: Boolean = {
+    this match {
+      case Type.Ptr =>
+        true
+      case _: Type.Ref =>
+        true
+      case a: Type.Array =>
+        a.ty.isLoadable
+      case _ =>
+        false
+    }
+  }
+
 }
 
 object Type {
