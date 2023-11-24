@@ -339,7 +339,7 @@ object Lower {
             val toty = nir.Val.Local(fresh(), nir.Type.Ptr)
 
             buf.label(slowPath, Seq(obj, toty))
-            val fromty = buf.let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
+            val fromty = buf.let(obj.loadAs(nir.Type.Ptr), unwind)
             buf.call(
               throwClassCastTy,
               throwClassCastVal,
@@ -492,7 +492,7 @@ object Lower {
         case nir.Op.Var(_) =>
           () // Already emmited
         case nir.Op.Varload(nir.Val.Local(slot, nir.Type.Var(ty))) =>
-          buf.let(n, nir.Op.Load(ty, nir.Val.Local(slot, nir.Type.Ptr)), unwind)
+          buf.let(n, nir.Val.Local(slot, nir.Type.Ptr).loadAs(ty), unwind)
         case nir.Op.Varstore(nir.Val.Local(slot, nir.Type.Var(ty)), value) =>
           buf.let(
             n,
@@ -601,7 +601,7 @@ object Lower {
       )
 
       val elem = genFieldElemOp(buf, genVal(buf, obj), name)
-      genLoadOp(buf, n, nir.Op.Load(ty, elem, Some(syncAttrs)))
+      genLoadOp(buf, n, elem.loadAs(ty, Some(syncAttrs)))
     }
 
     def genFieldstoreOp(buf: nir.Buffer, n: nir.Local, op: nir.Op.Fieldstore)(
@@ -653,11 +653,7 @@ object Lower {
               genConvOp(buf, asPtr, nir.Conv.Bitcast(nir.Type.Ptr, ptr))
               nir.Val.Local(asPtr, nir.Type.Ptr)
             }
-          genLoadOp(
-            buf,
-            valueAsByte,
-            nir.Op.Load(nir.Type.Byte, asPtr, syncAttrs)
-          )
+          genLoadOp(buf, valueAsByte, asPtr.loadAs(nir.Type.Byte, syncAttrs))
           genConvOp(
             buf,
             n,
@@ -668,7 +664,7 @@ object Lower {
         case nir.Op.Load(ty, ptr, syncAttrs) =>
           buf.let(
             n,
-            nir.Op.Load(ty, genVal(buf, ptr), syncAttrs),
+            genVal(buf, ptr).loadAs(ty, syncAttrs),
             unwind
           )
       }
@@ -827,7 +823,7 @@ object Lower {
           s"The virtual table of ${cls.name} does not contain $sig"
         )
 
-        val typeptr = let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
+        val typeptr = let(obj.loadAs(nir.Type.Ptr), unwind)
         val methptrptr = let(
           nir.Op.Elem(
             rtti(cls).struct,
@@ -837,15 +833,15 @@ object Lower {
           unwind
         )
 
-        let(n, nir.Op.Load(nir.Type.Ptr, methptrptr), unwind)
+        let(n, methptrptr.loadAs(nir.Type.Ptr), unwind)
       }
 
       def genTraitVirtualLookup(trt: Trait): Unit = {
         val sigid = dispatchTable.traitSigIds(sig)
-        val typeptr = let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
+        val typeptr = let(obj.loadAs(nir.Type.Ptr), unwind)
         val idptr =
           let(nir.Op.Elem(Rtti.layout, typeptr, RttiTraitIdPath), unwind)
-        val id = let(nir.Op.Load(nir.Type.Int, idptr), unwind)
+        val id = let(idptr.loadAs(nir.Type.Int), unwind)
         val rowptr = let(
           nir.Op.Elem(
             nir.Type.Ptr,
@@ -856,7 +852,7 @@ object Lower {
         )
         val methptrptr =
           let(nir.Op.Elem(nir.Type.Ptr, rowptr, Seq(id)), unwind)
-        let(n, nir.Op.Load(nir.Type.Ptr, methptrptr), unwind)
+        let(n, methptrptr.loadAs(nir.Type.Ptr), unwind)
       }
 
       def genMethodLookup(scope: ScopeInfo): Unit = {
@@ -962,7 +958,7 @@ object Lower {
         )
         // Hash map lookup can still not contain given signature
         throwIfNull(methptrptr)
-        let(n, nir.Op.Load(nir.Type.Ptr, methptrptr), unwind)
+        let(n, methptrptr.loadAs(nir.Type.Ptr), unwind)
       }
 
       genGuardNotNull(buf, obj)
@@ -1011,18 +1007,18 @@ object Lower {
 
       ty match {
         case ClassRef(cls) if meta.ranges(cls).length == 1 =>
-          val typeptr = let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
+          val typeptr = let(obj.loadAs(nir.Type.Ptr), unwind)
           let(nir.Comp.Ieq(nir.Type.Ptr, typeptr, rtti(cls).const), unwind)
 
         case ClassRef(cls) =>
           val range = meta.ranges(cls)
-          val typeptr = let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
+          val typeptr = let(obj.loadAs(nir.Type.Ptr), unwind)
           val idptr =
             let(
               nir.Op.Elem(Rtti.layout, typeptr, RttiClassIdPath),
               unwind
             )
-          val id = let(nir.Op.Load(nir.Type.Int, idptr), unwind)
+          val id = let(idptr.loadAs(nir.Type.Int), unwind)
           val ge = let(
             nir.Comp.Sle(nir.Type.Int, nir.Val.Int(range.start), id),
             unwind
@@ -1032,13 +1028,13 @@ object Lower {
           let(nir.Bin.And(nir.Type.Bool, ge, le), unwind)
 
         case TraitRef(trt) =>
-          val typeptr = let(nir.Op.Load(nir.Type.Ptr, obj), unwind)
+          val typeptr = let(obj.loadAs(nir.Type.Ptr), unwind)
           val idptr =
             let(
               nir.Op.Elem(Rtti.layout, typeptr, RttiClassIdPath),
               unwind
             )
-          val id = let(nir.Op.Load(nir.Type.Int, idptr), unwind)
+          val id = let(idptr.loadAs(nir.Type.Int), unwind)
           let(
             nir.Op.Call(
               Generate.ClassHasTraitSig,
@@ -1545,7 +1541,7 @@ object Lower {
 
       val arrTy = arrayMemoryLayout(ty)
       val elemPtr = buf.elem(arrTy, arr, arrayValuePath(idx), unwind)
-      buf.let(n, nir.Op.Load(ty, elemPtr), unwind)
+      buf.let(n, elemPtr.loadAs(ty), unwind)
     }
 
     def genArraystoreOp(buf: nir.Buffer, n: nir.Local, op: nir.Op.Arraystore)(
@@ -1579,7 +1575,7 @@ object Lower {
       genGuardNotNull(buf, arr)
       val lenPtr =
         buf.elem(ArrayHeader.layout, arr, ArrayHeaderLengthPath, unwind)
-      buf.let(n, nir.Op.Load(nir.Type.Int, lenPtr), unwind)
+      buf.let(n, lenPtr.loadAs(nir.Type.Int), unwind)
     }
 
     def genStackallocOp(buf: nir.Buffer, n: nir.Local, op: nir.Op.Stackalloc)(

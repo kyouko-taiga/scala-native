@@ -196,6 +196,14 @@ sealed abstract class Val {
     case _ =>
       this
   }
+
+  /** Returns a NIR operation loading a value of type `ty` from the memory
+   *  referenced by `this`.
+   */
+  final def loadAs(ty: Type, syncAttrs: Option[SyncAttrs] = None): Op.Load = {
+    Op.Load(ty, this, syncAttrs)
+  }
+
 }
 
 object Val {

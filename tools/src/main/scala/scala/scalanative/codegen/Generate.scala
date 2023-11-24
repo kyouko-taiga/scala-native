@@ -141,7 +141,7 @@ object Generate {
               Seq(nir.Val.Int(0), arrayPos)
             )
           ),
-          let(int, nir.Op.Load(nir.Type.Int, intptr)),
+          let(int, intptr.loadAs(nir.Type.Int)),
           let(
             toShift,
             nir.Bin.And(nir.Type.Int, bitIndex, nir.Val.Int(BitMatrix.RightBits))
@@ -374,7 +374,7 @@ object Generate {
               Seq(
                 nir.Inst.Label(entry, Seq.empty),
                 nir.Inst.Let(slot.id, selectSlot, nir.Next.None),
-                nir.Inst.Let(self.id, nir.Op.Load(clsTy, slot), nir.Next.None),
+                nir.Inst.Let(self.id, slot.loadAs(clsTy), nir.Next.None),
                 nir.Inst.Let(
                   cond.id,
                   nir.Comp.Ine(nir.Rt.Object, self, nir.Val.Null),
