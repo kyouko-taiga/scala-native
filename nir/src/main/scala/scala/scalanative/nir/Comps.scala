@@ -12,7 +12,7 @@ sealed abstract class Comp {
    *
    *  `this` is an operator that is defined for two values of type `ty`.
    */
-  final def apply(ty: Type, lhs: Val, rhs: Val): Op = {
+  final def apply(ty: Type, lhs: Val, rhs: Val): Op.Comp = {
     Op.Comp(this, ty, lhs, rhs)
   }
 
