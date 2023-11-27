@@ -76,15 +76,6 @@ class Buffer(implicit fresh: Fresh) {
       scope: ScopeId
   ): Val.Local = let(Op.Call(ty, ptr, args), unwind)
 
-  def store(
-      ty: Type,
-      ptr: Val,
-      value: Val,
-      unwind: Next,
-      syncAttrs: Option[SyncAttrs] = None
-  )(implicit pos: Position, scope: ScopeId): Val.Local =
-    let(Op.Store(ty, ptr, value, syncAttrs), unwind)
-
   def elem(ty: Type, ptr: Val, indexes: Seq[Val], unwind: Next)(implicit
       pos: Position,
       scope: ScopeId

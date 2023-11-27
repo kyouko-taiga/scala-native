@@ -1954,7 +1954,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
       val syncAttrs =
         if (!ptrp.symbol.isVolatile) None
         else Some(nir.SyncAttrs(nir.MemoryOrder.Release))
-      buf.store(ty, ptr, value, unwind, syncAttrs)
+      buf.let(value.storeAs(ty, to = ptr, syncAttrs), unwind)
     }
 
     def genRawPtrElemOp(app: Apply, code: Int): nir.Val = {
@@ -2662,8 +2662,7 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
       val syncAttrs =
         if (!sym.isVolatile) None
         else Some(nir.SyncAttrs(nir.MemoryOrder.Release))
-
-      buf.store(externTy, name, externValue, unwind, syncAttrs)
+      buf.let(externValue.storeAs(externTy, to = name, syncAttrs), unwind)
     }
 
     def toExtern(expectedTy: nir.Type, value: nir.Val)(implicit

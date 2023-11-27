@@ -233,7 +233,7 @@ object Generate {
           nir.Op.Stackalloc(nir.Type.Ptr, nir.Val.Long(0)),
           unwind
         ),
-        nir.Inst.Let(nir.Op.Store(nir.Type.Ptr, StackBottomVar, stackBottom), unwind),
+        nir.Inst.Let(stackBottom.storeAs(nir.Type.Ptr, to = StackBottomVar), unwind),
         // Init GC
         nir.Inst.Let(nir.Op.Call(InitSig, Init, Seq.empty), unwind)
       )
@@ -389,7 +389,7 @@ object Generate {
                   nir.Op.Classalloc(name, zone = None),
                   nir.Next.None
                 ),
-                nir.Inst.Let(nir.Op.Store(clsTy, slot, alloc), nir.Next.None),
+                nir.Inst.Let(alloc.storeAs(clsTy, to = slot), nir.Next.None),
                 nir.Inst.Let(nir.Op.Call(initSig, init, Seq(alloc)), nir.Next.None),
                 nir.Inst.Ret(alloc)
               )

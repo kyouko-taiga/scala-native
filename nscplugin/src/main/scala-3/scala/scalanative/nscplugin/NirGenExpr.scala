@@ -2139,7 +2139,7 @@ trait NirGenExpr(using Context) {
       val syncAttrs = Option.when(ptrp.symbol.isVolatile)(
         nir.SyncAttrs(nir.MemoryOrder.Release)
       )
-      buf.store(ty, ptr, value, unwind, syncAttrs)
+      buf.let(value.storeAs(ty, to = ptr, syncAttrs), unwind)
     }
 
     private def genRawPtrElemOp(app: Apply): nir.Val = {
@@ -2568,8 +2568,7 @@ trait NirGenExpr(using Context) {
       val syncAttrs = Option.when(sym.isVolatile)(
         nir.SyncAttrs(nir.MemoryOrder.Release)
       )
-
-      buf.store(externTy, name, externValue, unwind, syncAttrs)
+      buf.let(externValue.storeAs(externTy, to = name, syncAttrs), unwind)
     }
 
     def toExtern(expectedTy: nir.Type, value: nir.Val)(using

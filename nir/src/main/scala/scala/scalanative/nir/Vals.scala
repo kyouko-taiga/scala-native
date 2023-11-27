@@ -204,6 +204,17 @@ sealed abstract class Val {
     Op.Load(t, this, syncAttrs)
   }
 
+  /** Returns a NIR operation storing `this` as a value of type `t` to the
+   *  storage referenced by `to`, applying the given synchronization attributes.
+   */
+  final def storeAs(
+      t: Type,
+      to: Val,
+      syncAttrs: Option[SyncAttrs] = None
+  ): Op.Store = {
+    Op.Store(t, to, this, syncAttrs)
+  }
+
 }
 
 object Val {

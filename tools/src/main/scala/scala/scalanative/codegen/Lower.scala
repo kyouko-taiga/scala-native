@@ -625,7 +625,7 @@ object Lower {
         isVolatile = isVolatile
       )
       val elem = genFieldElemOp(buf, genVal(buf, obj), name)
-      genStoreOp(buf, n, nir.Op.Store(ty, elem, value, Some(syncAttrs)))
+      genStoreOp(buf, n, value.storeAs(ty, to = elem, Some(syncAttrs)))
     }
 
     def genFieldOp(buf: nir.Buffer, n: nir.Local, op: nir.Op)(implicit
@@ -690,18 +690,15 @@ object Lower {
           genStoreOp(
             buf,
             n,
-            nir.Op.Store(
-              nir.Type.Byte,
-              asPtr,
-              nir.Val.Local(valueAsByte, nir.Type.Byte),
-              syncAttrs
-            )
+            nir.Val
+              .Local(valueAsByte, nir.Type.Byte)
+              .storeAs(nir.Type.Byte, to = asPtr, syncAttrs)
           )
 
         case nir.Op.Store(ty, ptr, value, syncAttrs) =>
           buf.let(
             n,
-            nir.Op.Store(ty, genVal(buf, ptr), genVal(buf, value), syncAttrs),
+            genVal(buf, value).storeAs(ty, to = genVal(buf, ptr), syncAttrs),
             unwind
           )
       }
@@ -1558,7 +1555,7 @@ object Lower {
 
       val arrTy = arrayMemoryLayout(ty)
       val elemPtr = buf.elem(arrTy, arr, arrayValuePath(idx), unwind)
-      genStoreOp(buf, n, nir.Op.Store(ty, elemPtr, value))
+      genStoreOp(buf, n, value.storeAs(ty, to = elemPtr))
     }
 
     def genArraylengthOp(buf: nir.Buffer, n: nir.Local, op: nir.Op.Arraylength)(
@@ -1588,10 +1585,7 @@ object Lower {
       val pointee = buf.let(n, op, unwind)
       size match {
         case nir.Val.Size(1) if initValue.isCanonical =>
-          buf.let(
-            nir.Op.Store(ty, pointee, initValue, None),
-            unwind
-          )
+          buf.let(initValue.storeAs(ty, to = pointee), unwind)
         case sizeV =>
           val elemSize = MemoryLayout.sizeOf(ty)
           val size = sizeV match {
