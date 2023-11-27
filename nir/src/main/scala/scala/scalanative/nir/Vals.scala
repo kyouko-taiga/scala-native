@@ -198,7 +198,7 @@ sealed abstract class Val {
   }
 
   /** Returns a NIR operation loading a value of type `t` from the memory
-   *  referenced by `this`.
+   *  referenced by `this`, applying the given synchronization attributes.
    */
   final def loadAs(t: Type, syncAttrs: Option[SyncAttrs] = None): Op.Load = {
     Op.Load(t, this, syncAttrs)
