@@ -201,6 +201,7 @@ sealed abstract class Val {
    *  referenced by `this`, applying the given synchronization attributes.
    */
   final def loadAs(t: Type, syncAttrs: Option[SyncAttrs] = None): Op.Load = {
+    require(this.ty.isLoadable, s"'${this.ty}' is not loadable")
     Op.Load(t, this, syncAttrs)
   }
 
