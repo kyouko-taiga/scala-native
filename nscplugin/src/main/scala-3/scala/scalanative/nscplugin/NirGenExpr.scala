@@ -1543,32 +1543,42 @@ trait NirGenExpr(using Context) {
       }
     }
 
-    private def binaryOperationType(lty: nir.Type, rty: nir.Type) =
-      (lty, rty) match {
-        // Bug compatibility with scala/bug/issues/11253
-        case (nir.Type.Long, nir.Type.Float)     => nir.Type.Double
-        case (nir.Type.Ptr, _: nir.Type.RefKind) => lty
-        case (_: nir.Type.RefKind, nir.Type.Ptr) => rty
-        case (nir.Type.Bool, nir.Type.Bool)      => nir.Type.Bool
-        case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _))
-            if lwidth < 32 && rwidth < 32 =>
-          nir.Type.Int
-        case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _)) =>
-          if (lwidth >= rwidth) lty
-          else rty
-        case (nir.Type.FixedSizeI(_, _), nir.Type.F(_)) => rty
-        case (nir.Type.F(_), nir.Type.FixedSizeI(_, _)) => lty
-        case (nir.Type.F(lwidth), nir.Type.F(rwidth)) =>
-          if (lwidth >= rwidth) lty
-          else rty
-        case (_: nir.Type.RefKind, _: nir.Type.RefKind) => nir.Rt.Object
-        case (ty1, ty2) if ty1 == ty2                   => ty1
-        case (nir.Type.Nothing, ty)                     => ty
-        case (ty, nir.Type.Nothing)                     => ty
-        case _ =>
-          report.error(s"can't perform binary operation between $lty and $rty")
-          nir.Type.Nothing
-      }
+    /** Returns the type in which a non-shift binary operation is performed when
+     *  applied to operands of types `l` and `r`.
+     */
+    private def binaryOperationType(l: nir.Type, r: nir.Type) = (l, r) match {
+      // Bug compatibility with scala/bug/issues/11253
+      case (nir.Type.Long, nir.Type.Float) =>
+        nir.Type.Double
+      case (nir.Type.Ptr, _: nir.Type.RefKind) =>
+        l
+      case (_: nir.Type.RefKind, nir.Type.Ptr) =>
+        r
+      case (nir.Type.Bool, nir.Type.Bool) =>
+        nir.Type.Bool
+      case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _))
+          if lwidth < 32 && rwidth < 32 =>
+        nir.Type.Int
+      case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _)) =>
+        if (lwidth >= rwidth) lty else r
+      case (nir.Type.FixedSizeI(_, _), nir.Type.F(_)) =>
+        r
+      case (nir.Type.F(_), nir.Type.FixedSizeI(_, _)) =>
+        l
+      case (nir.Type.F(lwidth), nir.Type.F(rwidth)) =>
+        if (lwidth >= rwidth) l else r
+      case (_: nir.Type.RefKind, _: nir.Type.RefKind) =>
+        nir.Rt.Object
+      case (_, _) if l == r =>
+        l
+      case (nir.Type.Nothing, _) =>
+        r
+      case (_, nir.Type.Nothing) =>
+        l
+      case _ =>
+        report.error(s"can't perform binary operation between $l and $r")
+        nir.Type.Nothing
+    }
 
     private def genClassEquality(
         leftp: Tree,

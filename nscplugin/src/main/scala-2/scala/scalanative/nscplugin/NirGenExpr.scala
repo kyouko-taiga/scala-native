@@ -1620,6 +1620,61 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
       buf.let(makeOperation(operationType, l, r), unwind)(lhs.pos, getScopeId)
     }
 
+    /** Returns the type in which the operation identified by `code` is
+     *  performed when applied to operands of types `l` and `r`.
+     */
+    private def binaryOperationType(
+        code: Int,
+        l: nir.Type,
+        r: nir.Type
+    ): nir.Type = {
+      if (scalaPrimitives.isShiftOp(code)) {
+        if (l == nir.Type.Long) {
+          nir.Type.Long
+        } else {
+          nir.Type.Int
+        }
+      } else {
+        binaryOperationType(l, r)
+      }
+    }
+
+    /** Returns the type in which a non-shift binary operation is performed when
+     *  applied to operands of types `l` and `r`.
+     */
+    def binaryOperationType(l: nir.Type, r: nir.Type) = (l, r) match {
+      // Bug compatibility with scala/bug/issues/11253
+      case (nir.Type.Long, nir.Type.Float) =>
+        nir.Type.Double
+      case (nir.Type.Ptr, _: nir.Type.RefKind) =>
+        l
+      case (_: nir.Type.RefKind, nir.Type.Ptr) =>
+        r
+      case (nir.Type.Bool, nir.Type.Bool) =>
+        nir.Type.Bool
+      case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _))
+          if lwidth < 32 && rwidth < 32 =>
+        nir.Type.Int
+      case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _)) =>
+        if (lwidth >= rwidth) l else r
+      case (nir.Type.FixedSizeI(_, _), nir.Type.F(_)) =>
+        r
+      case (nir.Type.F(_), nir.Type.FixedSizeI(_, _)) =>
+        l
+      case (nir.Type.F(lwidth), nir.Type.F(rwidth)) =>
+        if (lwidth >= rwidth) l else r
+      case (_: nir.Type.RefKind, _: nir.Type.RefKind) =>
+        nir.Rt.Object
+      case (_, _) if l == r =>
+        l
+      case (nir.Type.Nothing, _) =>
+        r
+      case (_, nir.Type.Nothing) =>
+        l
+      case _ =>
+        abort(s"can't perform binary operation between $l and $r")
+    }
+
     private def genClassEquality(
         leftp: Tree,
         rightp: Tree,
@@ -1728,57 +1783,6 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           buf.label(mergen, Seq(mergev))
           mergev
         }
-    }
-
-    /** Returns the type in which the operation identified by `code` is
-     *  performed when applied to operands of types `lty` and `rty`.
-     */
-    private def binaryOperationType(
-        code: Int,
-        l: nir.Type,
-        r: nir.Type
-    ): nir.Type = {
-      if (scalaPrimitives.isShiftOp(code)) {
-        if (l == nir.Type.Long) {
-          nir.Type.Long
-        } else {
-          nir.Type.Int
-        }
-      } else {
-        binaryOperationType(l, r)
-      }
-    }
-
-    def binaryOperationType(lty: nir.Type, rty: nir.Type) = (lty, rty) match {
-      // Bug compatibility with scala/bug/issues/11253
-      case (nir.Type.Long, nir.Type.Float) =>
-        nir.Type.Double
-      case (nir.Type.Ptr, _: nir.Type.RefKind) =>
-        lty
-      case (_: nir.Type.RefKind, nir.Type.Ptr) =>
-        rty
-      case (nir.Type.Bool, nir.Type.Bool) =>
-        nir.Type.Bool
-      case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _))
-          if lwidth < 32 && rwidth < 32 =>
-        nir.Type.Int
-      case (nir.Type.FixedSizeI(lwidth, _), nir.Type.FixedSizeI(rwidth, _)) =>
-        if (lwidth >= rwidth) lty else rty
-      case (nir.Type.FixedSizeI(_, _), nir.Type.F(_)) =>
-        rty
-      case (nir.Type.F(_), nir.Type.FixedSizeI(_, _)) =>
-        lty
-      case (nir.Type.F(lwidth), nir.Type.F(rwidth)) =>
-        if (lwidth >= rwidth) lty else rty
-      case (_: nir.Type.RefKind, _: nir.Type.RefKind) =>
-        nir.Rt.Object
-      case (ty1, ty2) if ty1 == ty2 =>
-        ty1
-      case (nir.Type.Nothing, ty) => ty
-      case (ty, nir.Type.Nothing) => ty
-
-      case _ =>
-        abort(s"can't perform binary operation between $lty and $rty")
     }
 
     def genStringConcat(leftp: Tree, rightp: Tree): nir.Val = {
