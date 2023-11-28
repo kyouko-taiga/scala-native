@@ -1479,160 +1479,145 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
       }
     }
 
-    def genBinaryOp(code: Int, left: Tree, right: Tree, retty: nir.Type)(
-        implicit exprPos: nir.Position
-    ): nir.Val = {
+    /** Returns the NIR value computing the application of `code` on `lhs` and
+     *  `rhs`, which returns a value of type `returnType`.
+     */
+    def genBinaryOp(
+        code: Int,
+        lhs: Tree,
+        rhs: Tree,
+        returnType: nir.Type
+    )(implicit exprPos: nir.Position): nir.Val = {
       import scalaPrimitives._
 
-      val lty = genType(left.tpe)
-      val rty = genType(right.tpe)
-      val opty =
-        if (isShiftOp(code)) {
-          if (lty == nir.Type.Long) {
-            nir.Type.Long
-          } else {
-            nir.Type.Int
-          }
-        } else {
-          binaryOperationType(lty, rty)
-        }
+      /** The type of the left operand. */
+      val lty = genType(lhs.tpe)
 
-      val binres = opty match {
+      /** The type of the right operand. */
+      val rty = genType(rhs.tpe)
+
+      /** The type in which the operation is performed. */
+      val operationType = binaryOperationType(code, lty, rty)
+
+      /** Applies `genBinaryOp`. */
+      def genOp(
+          makeOperation: (nir.Type, nir.Val, nir.Val) => nir.Op
+      ): nir.Val = {
+        genBinaryOp(operationType, lhs, rhs, makeOperation)
+      }
+
+      /** Returns the NIR value computing the application of `code` on `lhs` and
+       *  `rhs`, with the operation perfomed in a floating-point type.
+       */
+      def genFloatingPointOp(): nir.Val = code match {
+        case ADD => genOp(nir.Bin.Fadd.apply _)
+        case SUB => genOp(nir.Bin.Fsub.apply _)
+        case MUL => genOp(nir.Bin.Fmul.apply _)
+        case DIV => genOp(nir.Bin.Fdiv.apply _)
+        case MOD => genOp(nir.Bin.Frem.apply _)
+        case EQ  => genOp(nir.Comp.Feq.apply _)
+        case NE  => genOp(nir.Comp.Fne.apply _)
+        case LT  => genOp(nir.Comp.Flt.apply _)
+        case LE  => genOp(nir.Comp.Fle.apply _)
+        case GT  => genOp(nir.Comp.Fgt.apply _)
+        case GE  => genOp(nir.Comp.Fge.apply _)
+        case _ =>
+          abort("Unknown floating point type binary operation code: " + code)
+      }
+
+      /** Returns the NIR value computing the application of `code` on `lhs` and
+       *  `rhs`, with the operation perfomed in an integer or Boolean type.
+       */
+      def genBooleanOrIntegerOp(): nir.Val = code match {
+        case ADD  => genOp(nir.Bin.Iadd.apply _)
+        case SUB  => genOp(nir.Bin.Isub.apply _)
+        case MUL  => genOp(nir.Bin.Imul.apply _)
+        case DIV  => genOp(nir.Bin.Sdiv.apply _)
+        case MOD  => genOp(nir.Bin.Srem.apply _)
+        case OR   => genOp(nir.Bin.Or.apply _)
+        case XOR  => genOp(nir.Bin.Xor.apply _)
+        case AND  => genOp(nir.Bin.And.apply _)
+        case LSL  => genOp(nir.Bin.Shl.apply _)
+        case LSR  => genOp(nir.Bin.Lshr.apply _)
+        case ASR  => genOp(nir.Bin.Ashr.apply _)
+        case EQ   => genOp(nir.Comp.Ieq.apply _)
+        case NE   => genOp(nir.Comp.Ine.apply _)
+        case LT   => genOp(nir.Comp.Slt.apply _)
+        case LE   => genOp(nir.Comp.Sle.apply _)
+        case GT   => genOp(nir.Comp.Sgt.apply _)
+        case GE   => genOp(nir.Comp.Sge.apply _)
+        case ZOR  => genIf(returnType, lhs, Literal(Constant(true)), rhs)
+        case ZAND => genIf(returnType, lhs, rhs, Literal(Constant(false)))
+        case _ =>
+          abort("Unknown integer type binary operation code: " + code)
+      }
+
+      /** Returns the NIR value computing the application of `code` on `lhs` and
+       *  `rhs`, with the operation perfomed on reference types.
+       */
+      def genReferenceOp(): nir.Val = code match {
+        case EQ => genEquals(ref = false, negated = false)
+        case NE => genEquals(ref = false, negated = true)
+        case ID => genEquals(ref = true, negated = false)
+        case NI => genEquals(ref = true, negated = true)
+        case _ =>
+          abort("Unknown reference type binary operation code: " + code)
+      }
+
+      /** Returns the NIR value computing the application of `code` on `lhs` and
+       *  `rhs`, with the operation perfomed on pointers.
+       */
+      def genPointerOp(): nir.Val = code match {
+        case EQ | ID => genOp(nir.Comp.Ieq.apply _)
+        case NE | NI => genOp(nir.Comp.Ine.apply _)
+      }
+
+      /** Returns the NIR value computing whether `lhs` and `rhs` are equal.
+       *
+       *  @param ref
+       *    `true` iff the operation uses reference equality.
+       *  @param ref
+       *    `negated` iff the result of the operation is negated.
+       */
+      def genEquals(ref: Boolean, negated: Boolean) = (lhs, rhs) match {
+        // If null is present on either side, we must always
+        // generate reference equality, regardless of where it
+        // was called with == or eq. This shortcut is not optional.
+        case (Literal(Constant(null)), _) | (_, Literal(Constant(null))) =>
+          genClassEquality(lhs, rhs, ref = true, negated = negated)
+        case _ =>
+          genClassEquality(lhs, rhs, ref = ref, negated = negated)
+      }
+
+      val result = operationType match {
         case _: nir.Type.F =>
-          code match {
-            case ADD =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Fadd, _, _, _), left, right, opty)
-            case SUB =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Fsub, _, _, _), left, right, opty)
-            case MUL =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Fmul, _, _, _), left, right, opty)
-            case DIV =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Fdiv, _, _, _), left, right, opty)
-            case MOD =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Frem, _, _, _), left, right, opty)
-
-            case EQ =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Feq, _, _, _), left, right, opty)
-            case NE =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Fne, _, _, _), left, right, opty)
-            case LT =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Flt, _, _, _), left, right, opty)
-            case LE =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Fle, _, _, _), left, right, opty)
-            case GT =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Fgt, _, _, _), left, right, opty)
-            case GE =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Fge, _, _, _), left, right, opty)
-
-            case _ =>
-              abort(
-                "Unknown floating point type binary operation code: " + code
-              )
-          }
-
+          genFloatingPointOp()
         case nir.Type.Bool | _: nir.Type.I =>
-          code match {
-            case ADD =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Iadd, _, _, _), left, right, opty)
-            case SUB =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Isub, _, _, _), left, right, opty)
-            case MUL =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Imul, _, _, _), left, right, opty)
-            case DIV =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Sdiv, _, _, _), left, right, opty)
-            case MOD =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Srem, _, _, _), left, right, opty)
-
-            case OR =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Or, _, _, _), left, right, opty)
-            case XOR =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Xor, _, _, _), left, right, opty)
-            case AND =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.And, _, _, _), left, right, opty)
-            case LSL =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Shl, _, _, _), left, right, opty)
-            case LSR =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Lshr, _, _, _), left, right, opty)
-            case ASR =>
-              genBinaryOp(nir.Op.Bin(nir.Bin.Ashr, _, _, _), left, right, opty)
-
-            case EQ =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Ieq, _, _, _), left, right, opty)
-            case NE =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Ine, _, _, _), left, right, opty)
-            case LT =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Slt, _, _, _), left, right, opty)
-            case LE =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Sle, _, _, _), left, right, opty)
-            case GT =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Sgt, _, _, _), left, right, opty)
-            case GE =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Sge, _, _, _), left, right, opty)
-
-            case ZOR =>
-              genIf(retty, left, Literal(Constant(true)), right)
-            case ZAND =>
-              genIf(retty, left, right, Literal(Constant(false)))
-
-            case _ =>
-              abort("Unknown integer type binary operation code: " + code)
-          }
-
+          genBooleanOrIntegerOp()
         case _: nir.Type.RefKind =>
-          def genEquals(ref: Boolean, negated: Boolean) = (left, right) match {
-            // If null is present on either side, we must always
-            // generate reference equality, regardless of where it
-            // was called with == or eq. This shortcut is not optional.
-            case (Literal(Constant(null)), _) | (_, Literal(Constant(null))) =>
-              genClassEquality(left, right, ref = true, negated = negated)
-            case _ =>
-              genClassEquality(left, right, ref = ref, negated = negated)
-          }
-
-          code match {
-            case EQ =>
-              genEquals(ref = false, negated = false)
-            case NE =>
-              genEquals(ref = false, negated = true)
-            case ID =>
-              genEquals(ref = true, negated = false)
-            case NI =>
-              genEquals(ref = true, negated = true)
-
-            case _ =>
-              abort("Unknown reference type operation code: " + code)
-          }
-
+          genReferenceOp()
         case nir.Type.Ptr =>
-          code match {
-            case EQ | ID =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Ieq, _, _, _), left, right, opty)
-            case NE | NI =>
-              genBinaryOp(nir.Op.Comp(nir.Comp.Ine, _, _, _), left, right, opty)
-          }
-
+          genPointerOp()
         case ty =>
           abort("Unknown binary operation type: " + ty)
       }
 
-      genCoercion(binres, binres.ty, retty)(right.pos)
+      genCoercion(result, result.ty, returnType)(rhs.pos)
     }
 
+    /** Returns the NIR value computing the application of a binary operation on
+     *  `lhs` and `rhs` coerced to `operationType`, using `makeOperation` to
+     *  build the operation.
+     */
     def genBinaryOp(
-        op: (nir.Type, nir.Val, nir.Val) => nir.Op,
-        leftp: Tree,
-        rightp: Tree,
-        opty: nir.Type
+        operationType: nir.Type,
+        lhs: Tree,
+        rhs: Tree,
+        makeOperation: (nir.Type, nir.Val, nir.Val) => nir.Op
     ): nir.Val = {
-      implicit val leftPos: nir.Position = leftp.pos
-      val leftty = genType(leftp.tpe)
-      val left = genExpr(leftp)
-      val leftcoerced = genCoercion(left, leftty, opty)
-      val rightty = genType(rightp.tpe)
-      val right = genExpr(rightp)
-      val rightcoerced = genCoercion(right, rightty, opty)(rightp.pos)
-
-      buf.let(op(opty, leftcoerced, rightcoerced), unwind)
+      val l = genCoercion(lhs, operationType)(lhs.pos)
+      val r = genCoercion(rhs, operationType)(rhs.pos)
+      buf.let(makeOperation(operationType, l, r), unwind)(lhs.pos, getScopeId)
     }
 
     private def genClassEquality(
@@ -1743,6 +1728,25 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
           buf.label(mergen, Seq(mergev))
           mergev
         }
+    }
+
+    /** Returns the type in which the operation identified by `code` is
+     *  performed when applied to operands of types `lty` and `rty`.
+     */
+    private def binaryOperationType(
+        code: Int,
+        l: nir.Type,
+        r: nir.Type
+    ): nir.Type = {
+      if (scalaPrimitives.isShiftOp(code)) {
+        if (l == nir.Type.Long) {
+          nir.Type.Long
+        } else {
+          nir.Type.Int
+        }
+      } else {
+        binaryOperationType(l, r)
+      }
     }
 
     def binaryOperationType(lty: nir.Type, rty: nir.Type) = (lty, rty) match {
@@ -2378,6 +2382,17 @@ trait NirGenExpr[G <: nsc.Global with Singleton] { self: NirGenPhase[G] =>
       val (fromty, toty) = coercionTypes(code)
 
       genCoercion(rec, fromty, toty)(app.pos)
+    }
+
+    /** Returns the NIR value converting the value of `source` to a value of
+     *  type `target`.
+     */
+    private def genCoercion(source: Tree, target: nir.Type)(implicit
+        pos: nir.Position
+    ): nir.Val = {
+      val t = genType(source.tpe)
+      val e = genExpr(source)
+      genCoercion(e, t, target)
     }
 
     def genCoercion(value: nir.Val, fromty: nir.Type, toty: nir.Type)(implicit
